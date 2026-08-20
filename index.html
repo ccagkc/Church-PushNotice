@@ -20,26 +20,26 @@
             </div>
             <div>
                 <h1 class="text-xl font-bold">推播廣播控制器</h1>
-                <p class="text-xs text-slate-400">CCAGKC Church Calendar · Admin Console</p>
+                <p class="text-xs text-slate-400">CCAGKC Church Calendar · Direct FCM Engine</p>
             </div>
         </div>
 
-        <!-- 1. 登入區塊 (未登入時顯示) -->
+        <!-- 1. 管理員驗證區塊 -->
         <div id="loginSection" class="space-y-4">
-            <p class="text-sm text-slate-300">請使用管理員帳號密碼進行安全驗證：</p>
+            <p class="text-xs text-slate-300">請輸入主系統的管理員密碼以解鎖控制台：</p>
             <div>
-                <label class="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">管理員 Passcode</label>
+                <label class="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">管理密碼 (Passcode)</label>
                 <input type="password" id="adminPassword" placeholder="請輸入管理員密碼" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-purple-500 transition">
             </div>
-            <button id="loginBtn" className="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-3.5 rounded-xl transition shadow-md">
-                安全驗證並登入
+            <button id="loginBtn" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3.5 rounded-xl transition shadow-md flex items-center justify-center gap-2">
+                <i class="fa-solid fa-lock-open"></i> 安全驗證登入
             </button>
         </div>
 
-        <!-- 2. 控制台表單區塊 (已登入時顯示) -->
+        <!-- 2. 控制台表單區塊 (驗證成功後顯示) -->
         <form id="pushForm" class="hidden space-y-4">
             <div class="bg-purple-950/40 border border-purple-800/50 p-3 rounded-xl flex justify-between items-center text-xs text-purple-200">
-                <span><i class="fa-solid fa-user-shield mr-1"></i> 管理員身份已確認</span>
+                <span><i class="fa-solid fa-user-shield mr-1 text-emerald-400"></i> 管理員身分已驗證</span>
                 <button type="button" id="logoutBtn" class="text-slate-400 hover:text-white underline">登出</button>
             </div>
 
@@ -59,20 +59,20 @@
             </div>
 
             <button type="submit" id="submitBtn" class="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-4 rounded-xl shadow-lg transition active:scale-95 flex items-center justify-center gap-2">
-                <i class="fa-solid fa-bullhorn"></i> 發布廣播任務至佇列
+                <i class="fa-solid fa-bullhorn"></i> 即刻進行全體廣播推播
             </button>
         </form>
 
         <div id="statusBox" class="hidden p-4 rounded-xl text-sm border font-medium"></div>
     </div>
 
-    <!-- Firebase Web SDK (完全不需要 Private Key) -->
+    <!-- Firebase Web SDK v11 (現代化 Modular 寫法) -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, collection, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // 💡 與主應用完全相同的公共 Config (絕對公開安全)
+        // 公開安全組態 (無須隱藏，完全由 Security Rules 防護)
         const firebaseConfig = {
             apiKey: "AIzaSyAEMB-eVojfzcUMyKt9JgGK_okPRO2V73g",
             authDomain: "ccagkc-biblereading-project.firebaseapp.com",
@@ -92,7 +92,7 @@
         const pushForm = document.getElementById('pushForm');
         const statusBox = document.getElementById('statusBox');
 
-        // 監聽登入狀態
+        // 監聽管理員登入狀態
         onAuthStateChanged(auth, (user) => {
             if (user && user.email === ADMIN_EMAIL) {
                 loginSection.classList.add('hidden');
@@ -103,29 +103,30 @@
             }
         });
 
-        // 管理員登入
+        // 登入驗證
         document.getElementById('loginBtn').addEventListener('click', async () => {
             const pass = document.getElementById('adminPassword').value;
+            if(!pass) return alert("請輸入密碼");
             try {
                 await signInWithEmailAndPassword(auth, ADMIN_EMAIL, pass);
             } catch (err) {
-                alert("密碼錯誤或驗證失敗！");
+                alert("驗證失敗：管理員密碼錯誤！");
             }
         });
 
         // 登出
         document.getElementById('logoutBtn').addEventListener('click', () => signOut(auth));
 
-        // 提交推播廣播任務
+        // 發布推播任務至全體教友
         pushForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const btn = document.getElementById('submitBtn');
             btn.disabled = true;
-            btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 寫入廣播任務中...`;
+            btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 正在發布廣播指令...`;
             statusBox.className = "hidden";
-        
+
             try {
-                // 使用 doc 與 setDoc 寫入 Admin 專屬的 pushTask 節點 (避免未授權 Collection 報錯)
+                // 將任務寫入 pushQueue 的 latestTask 節點
                 const taskRef = doc(db, "artifacts", "ccagkc-ChurchCalendarApp", "public", "data", "pushQueue", "latestTask");
                 
                 await setDoc(taskRef, {
@@ -136,17 +137,16 @@
                     createdBy: auth.currentUser.uid,
                     status: 'pending'
                 }, { merge: true });
-        
+
                 statusBox.className = "p-4 rounded-xl text-sm border font-medium bg-emerald-950/80 border-emerald-700 text-emerald-200";
-                statusBox.innerHTML = `<i class="fa-solid fa-circle-check mr-2"></i> 推播任務已成功寫入資料庫！`;
+                statusBox.innerHTML = `<i class="fa-solid fa-circle-check mr-2"></i> 推播廣播指令已成功發布！`;
             } catch (err) {
-                console.error("Firestore Write Error:", err);
                 statusBox.className = "p-4 rounded-xl text-sm border font-medium bg-red-950/80 border-red-700 text-red-200";
-                statusBox.innerHTML = `<i class="fa-solid fa-triangle-exclamation mr-2"></i> 寫入失敗：${err.message}`;
+                statusBox.innerHTML = `<i class="fa-solid fa-triangle-exclamation mr-2"></i> 發布失敗：${err.message}`;
             } finally {
                 statusBox.classList.remove('hidden');
                 btn.disabled = false;
-                btn.innerHTML = `<i class="fa-solid fa-bullhorn"></i> 發布廣播任務至佇列`;
+                btn.innerHTML = `<i class="fa-solid fa-bullhorn"></i> 即刻進行全體廣播推播`;
             }
         });
     </script>
