@@ -123,22 +123,26 @@
             btn.disabled = true;
             btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 寫入廣播任務中...`;
             statusBox.className = "hidden";
-
+        
             try {
-                // 將推播任務安全寫入 Firestore 佇列
-                await addDoc(collection(db, "artifacts/ccagkc-ChurchCalendarApp/public/data/pushTasks"), {
+                // 使用 doc 與 setDoc 寫入 Admin 專屬的 pushTask 節點 (避免未授權 Collection 報錯)
+                const taskRef = doc(db, "artifacts", "ccagkc-ChurchCalendarApp", "public", "data", "pushQueue", "latestTask");
+                
+                await setDoc(taskRef, {
                     title: document.getElementById('pushTitle').value,
                     body: document.getElementById('pushBody').value,
                     targetUrl: document.getElementById('targetUrl').value,
                     createdAt: new Date().toISOString(),
+                    createdBy: auth.currentUser.uid,
                     status: 'pending'
-                });
-
+                }, { merge: true });
+        
                 statusBox.className = "p-4 rounded-xl text-sm border font-medium bg-emerald-950/80 border-emerald-700 text-emerald-200";
-                statusBox.innerHTML = `<i class="fa-solid fa-circle-check mr-2"></i> 推播廣播任務已成功寫入資料庫！系統將自動廣播至全體會員設備。`;
+                statusBox.innerHTML = `<i class="fa-solid fa-circle-check mr-2"></i> 推播任務已成功寫入資料庫！`;
             } catch (err) {
+                console.error("Firestore Write Error:", err);
                 statusBox.className = "p-4 rounded-xl text-sm border font-medium bg-red-950/80 border-red-700 text-red-200";
-                statusBox.innerHTML = `<i class="fa-solid fa-triangle-exclamation mr-2"></i> 錯誤：${err.message}`;
+                statusBox.innerHTML = `<i class="fa-solid fa-triangle-exclamation mr-2"></i> 寫入失敗：${err.message}`;
             } finally {
                 statusBox.classList.remove('hidden');
                 btn.disabled = false;
